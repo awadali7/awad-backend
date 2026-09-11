@@ -1,0 +1,47 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum BillType {
+  emi
+  chitty
+  recurring
+  credit_card
+}
+
+model Bill {
+  id                 String    @id @default(uuid())
+  name               String
+  category           String
+  type               BillType
+  amount             Int
+  /// Day of month (1-31), clamped to the month's last day. Null = not set.
+  dueDay             Int?
+  /// Due on the last calendar day of the month (overrides dueDay).
+  endOfMonth         Boolean   @default(false)
+  installmentsPaid   Int?
+  installmentsTotal  Int?
+  installmentsLeft   Int?
+  /// "YYYY-MM" of the cycle last marked paid.
+  lastPaidCycle      String?
+  /// "YYYY-MM" of the cycle the "due tomorrow" notification already fired for.
+  lastNotifiedCycle  String?
+  archived           Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model IncomeSettings {
+  /// Single household row, fixed id.
+  id           String @id @default("household")
+  userSalary   Int
+  spouseSalary Int
+}

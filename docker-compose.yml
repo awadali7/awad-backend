@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: awad
+      POSTGRES_PASSWORD: awad
+      POSTGRES_DB: emi_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - awad_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  awad_postgres_data:

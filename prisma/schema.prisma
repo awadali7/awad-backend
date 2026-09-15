@@ -45,3 +45,55 @@ model IncomeSettings {
   userSalary   Int
   spouseSalary Int
 }
+
+enum OrderStatus {
+  created
+  paid
+  failed
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  orders Order[]
+}
+
+model Product {
+  id          String  @id @default(uuid())
+  slug        String  @unique
+  name        String
+  description String
+  /// Price in paise (smallest INR unit) — Razorpay convention, avoids float rounding.
+  priceInPaise Int
+  /// Only ever returned once the caller's Order for this product is `paid`.
+  downloadUrl String
+  imageUrl    String?
+  /// Soft-delete flag (mirrors Bill.archived). False = hidden from public listing.
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders Order[]
+}
+
+model Order {
+  id                String      @id @default(uuid())
+  userId            String
+  productId         String
+  /// Snapshot of Product.priceInPaise at purchase time.
+  amountInPaise     Int
+  status            OrderStatus @default(created)
+  razorpayOrderId   String?     @unique
+  razorpayPaymentId String?
+  razorpaySignature String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}

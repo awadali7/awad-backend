@@ -5,6 +5,9 @@ import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { BillsModule } from './bills/bills.module';
 import { IncomeModule } from './income/income.module';
+import { AuthModule } from './auth/auth.module';
+import { PaymentsModule } from './payments/payments.module';
+import { BullseyeModule } from './bullseye/bullseye.module';
 
 @Module({
   imports: [
@@ -12,6 +15,9 @@ import { IncomeModule } from './income/income.module';
     PrismaModule,
     BillsModule,
     IncomeModule,
+    AuthModule,
+    PaymentsModule,
+    BullseyeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

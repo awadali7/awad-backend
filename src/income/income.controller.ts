@@ -1,12 +1,13 @@
 import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
-import { ApiSecurity, ApiTags } from '@nestjs/swagger';
-import { ApiKeyGuard } from '../auth/api-key.guard';
+import { ApiBearerAuth, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import { ApiKeyOrAdminGuard } from '../admin/api-key-or-admin.guard';
 import { IncomeService } from './income.service';
 import { UpdateIncomeDto } from './dto/update-income.dto';
 
 @ApiTags('income')
 @ApiSecurity('api-key')
-@UseGuards(ApiKeyGuard)
+@ApiBearerAuth('bearer')
+@UseGuards(ApiKeyOrAdminGuard)
 @Controller('income')
 export class IncomeController {
   constructor(private readonly incomeService: IncomeService) {}

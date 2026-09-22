@@ -6,6 +6,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { BillsModule } from './bills/bills.module';
 import { IncomeModule } from './income/income.module';
 import { AuthModule } from './auth/auth.module';
+import { AdminModule } from './admin/admin.module';
 import { PaymentsModule } from './payments/payments.module';
 import { BullseyeModule } from './bullseye/bullseye.module';
 
@@ -16,6 +17,7 @@ import { BullseyeModule } from './bullseye/bullseye.module';
     BillsModule,
     IncomeModule,
     AuthModule,
+    AdminModule,
     PaymentsModule,
     BullseyeModule,
   ],

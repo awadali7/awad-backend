@@ -102,12 +102,36 @@ npm run prisma:studio     # browse the DB in Prisma Studio
 
 ## Deployment
 
-Set `DATABASE_URL`, `API_KEY`, `CORS_ORIGIN` (the deployed frontend's origin),
-and `PORT` in the environment, then:
+Set `NODE_ENV=production` plus every variable in `.env.example`. The process
+refuses to start if any of these are missing, listing all of them at once:
+
+| Variable | Notes |
+| --- | --- |
+| `DATABASE_URL` | Postgres connection string |
+| `API_KEY` | Shared secret for machine callers (`x-api-key`) |
+| `JWT_SECRET` | Storefront customer tokens |
+| `ADMIN_JWT_SECRET` | `/admin` console tokens — must differ from `JWT_SECRET` |
+| `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET` | Bullseye checkout |
+| `CORS_ORIGIN` | Deployed frontend origin(s), comma-separated. Required in production — the localhost fallback would silently block every browser call |
+| `PORT` | Defaults to 3001 |
 
 ```bash
 npm ci
 npm run build
 npm run prisma:deploy
+npm run prisma:seed      # first deploy only — creates the admin user
 npm run start:prod
 ```
+
+Seeding reads `ADMIN_USERNAME` / `ADMIN_PASSWORD` and only ever *creates* the
+admin account, so re-running a deploy never resets a password changed since.
+
+### Production behaviour
+
+- **Swagger is off** when `NODE_ENV=production`, since it documents the admin
+  auth routes. Set `ENABLE_SWAGGER=true` to re-enable it deliberately.
+- **`helmet`** sets the standard security headers; `x-powered-by` is disabled.
+- **Shutdown hooks** are enabled, so SIGTERM closes the Prisma pool cleanly.
+- **Rate limiting is in-process.** The 5/min limit on login is per instance, so
+  running more than one replica multiplies it — move `ThrottlerModule` onto a
+  shared store (Redis) before scaling out.

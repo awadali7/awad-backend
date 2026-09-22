@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import * as bcrypt from 'bcrypt';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
 
@@ -98,7 +99,39 @@ const SEED_BILLS = [
   },
 ];
 
+/**
+ * Creates the /admin operator account from ADMIN_USERNAME / ADMIN_PASSWORD.
+ * Only ever creates: re-running the seed must not reset a password that has
+ * since been changed through the console.
+ */
+async function seedAdminUser() {
+  const username = (process.env.ADMIN_USERNAME ?? '').toLowerCase().trim();
+  const password = process.env.ADMIN_PASSWORD;
+
+  if (!username || !password) {
+    console.log('Skipping admin seed — ADMIN_USERNAME/ADMIN_PASSWORD not set.');
+    return;
+  }
+
+  const existing = await prisma.adminUser.findUnique({ where: { username } });
+  if (existing) {
+    console.log(`Skipping admin seed — "${username}" already exists.`);
+    return;
+  }
+
+  await prisma.adminUser.create({
+    data: {
+      username,
+      passwordHash: await bcrypt.hash(password, 10),
+      name: 'Awad Ali',
+    },
+  });
+  console.log(`Created admin user "${username}".`);
+}
+
 async function main() {
+  await seedAdminUser();
+
   const billCount = await prisma.bill.count();
   if (billCount === 0) {
     await prisma.bill.createMany({ data: SEED_BILLS });

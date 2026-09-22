@@ -47,9 +47,15 @@ avoids that without granting anything server-wide.
 ```bash
 sudo mkdir -p /var/www/awad-backend && cd /var/www/awad-backend
 # clone or rsync the repo here, then:
-npm ci
+npm ci          # runs `prisma generate` via postinstall
 npm run build
 ```
+
+`generated/prisma` is gitignored, so a fresh clone has no Prisma client and
+`nest build` fails with ~37 `Cannot find module '../../generated/prisma/client'`
+errors. The `postinstall` hook generates it during `npm ci`. If you are on a
+clone that predates that hook, run `npm run prisma:generate` before building.
+`prisma generate` reads only the schema — it needs no database and no `.env`.
 
 ## 3. Environment
 

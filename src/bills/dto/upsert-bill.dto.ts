@@ -6,9 +6,13 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
 } from 'class-validator';
+
+/** Billing cycles are stored as "YYYY-MM" throughout. */
+const CYCLE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 const BILL_TYPES = ['emi', 'chitty', 'recurring', 'credit_card'] as const;
 export type BillTypeDto = (typeof BILL_TYPES)[number];
@@ -73,6 +77,19 @@ export class UpsertBillDto {
   @IsInt()
   @Min(0)
   installmentsLeft?: number | null;
+
+  @ApiPropertyOptional({
+    description:
+      '"YYYY-MM" of the first cycle this is billed in. Omit for a bill that is already running.',
+    example: '2026-11',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(CYCLE_PATTERN, {
+    message: 'startCycle must be formatted as YYYY-MM',
+  })
+  startCycle?: string | null;
 
   @ApiPropertyOptional({
     description: '"YYYY-MM" of the cycle last marked paid.',

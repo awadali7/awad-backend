@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertBillDto } from './dto/upsert-bill.dto';
 
@@ -33,6 +37,7 @@ export class BillsService {
       installmentsPaid: dto.installmentsPaid ?? null,
       installmentsTotal: dto.installmentsTotal ?? null,
       installmentsLeft: dto.installmentsLeft ?? null,
+      startCycle: dto.startCycle ?? null,
       lastPaidCycle: dto.lastPaidCycle ?? null,
       lastNotifiedCycle: dto.lastNotifiedCycle ?? null,
       archived: dto.archived ?? false,
@@ -57,6 +62,14 @@ export class BillsService {
   async markPaid(id: string, cycle = currentCycle()) {
     const bill = await this.findOne(id);
     if (bill.lastPaidCycle === cycle) return bill;
+
+    // A bill that starts later isn't owed yet — paying it early would advance
+    // the instalment count against a cycle that was never billed.
+    if (bill.startCycle && cycle < bill.startCycle) {
+      throw new BadRequestException(
+        `${bill.name} does not start until ${bill.startCycle}`,
+      );
+    }
 
     const data: {
       lastPaidCycle: string;

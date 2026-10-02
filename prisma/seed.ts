@@ -7,8 +7,11 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
-const HOUSEHOLD_ID = 'household';
-const DEFAULT_INCOME = { userSalary: 30_000, spouseSalary: 10_000 };
+// Permanent income sources (cycle null = counts towards every month).
+const DEFAULT_INCOME_SOURCES = [
+  { label: 'My salary', amount: 30_000 },
+  { label: 'Spouse salary', amount: 10_000 },
+];
 
 // Mirrors emi/lib/seed.ts — the household's starting bills, seeded once.
 const SEED_BILLS = [
@@ -140,12 +143,17 @@ async function main() {
     console.log(`Skipping bill seed — ${billCount} bill(s) already exist.`);
   }
 
-  await prisma.incomeSettings.upsert({
-    where: { id: HOUSEHOLD_ID },
-    update: {},
-    create: { id: HOUSEHOLD_ID, ...DEFAULT_INCOME },
-  });
-  console.log('Ensured household income settings exist.');
+  const incomeCount = await prisma.incomeSource.count();
+  if (incomeCount === 0) {
+    await prisma.incomeSource.createMany({
+      data: DEFAULT_INCOME_SOURCES.map((source) => ({ ...source, cycle: null })),
+    });
+    console.log(`Seeded ${DEFAULT_INCOME_SOURCES.length} income sources.`);
+  } else {
+    console.log(
+      `Skipping income seed — ${incomeCount} source(s) already exist.`,
+    );
+  }
 }
 
 main()

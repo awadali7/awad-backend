@@ -30,6 +30,9 @@ model Bill {
   installmentsPaid   Int?
   installmentsTotal  Int?
   installmentsLeft   Int?
+  /// "YYYY-MM" of the first cycle this is billed in. Null = already running,
+  /// which is how every bill created before this field existed behaves.
+  startCycle         String?
   /// "YYYY-MM" of the cycle last marked paid.
   lastPaidCycle      String?
   /// "YYYY-MM" of the cycle the "due tomorrow" notification already fired for.
@@ -39,11 +42,23 @@ model Bill {
   updatedAt          DateTime  @updatedAt
 }
 
-model IncomeSettings {
-  /// Single household row, fixed id.
-  id           String @id @default("household")
-  userSalary   Int
-  spouseSalary Int
+/// A source of household income.
+///
+/// `cycle` null  -> permanent: counts towards every month (salary, rent received).
+/// `cycle` set   -> one-off: counts only towards that "YYYY-MM" (bonus, freelance).
+///
+/// Same null-means-always convention as Bill.startCycle, so one list covers both
+/// kinds without a second table or a type flag.
+model IncomeSource {
+  id        String   @id @default(uuid())
+  label     String
+  /// Whole rupees.
+  amount    Int
+  cycle     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cycle])
 }
 
 enum OrderStatus {

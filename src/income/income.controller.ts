@@ -1,8 +1,20 @@
-import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { ApiKeyOrAdminGuard } from '../admin/api-key-or-admin.guard';
+import { IncomeQueryDto } from './dto/income-query.dto';
+import { UpsertIncomeSourceDto } from './dto/upsert-income-source.dto';
 import { IncomeService } from './income.service';
-import { UpdateIncomeDto } from './dto/update-income.dto';
 
 @ApiTags('income')
 @ApiSecurity('api-key')
@@ -12,13 +24,30 @@ import { UpdateIncomeDto } from './dto/update-income.dto';
 export class IncomeController {
   constructor(private readonly incomeService: IncomeService) {}
 
+  /** Permanent sources plus the one-offs for `cycle`, with totals. */
   @Get()
-  find() {
-    return this.incomeService.find();
+  find(@Query() query: IncomeQueryDto) {
+    return this.incomeService.findForCycle(query.cycle);
   }
 
-  @Put()
-  update(@Body() dto: UpdateIncomeDto) {
-    return this.incomeService.update(dto);
+  @Get('all')
+  findAll() {
+    return this.incomeService.findAll();
+  }
+
+  @Post()
+  create(@Body() dto: UpsertIncomeSourceDto) {
+    return this.incomeService.create(dto);
+  }
+
+  @Put(':id')
+  update(@Param('id') id: string, @Body() dto: UpsertIncomeSourceDto) {
+    return this.incomeService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  async remove(@Param('id') id: string) {
+    await this.incomeService.remove(id);
   }
 }

@@ -1,26 +1,83 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { UpdateIncomeDto } from './dto/update-income.dto';
+import { UpsertIncomeSourceDto } from './dto/upsert-income-source.dto';
 
-const HOUSEHOLD_ID = 'household';
-const DEFAULT_INCOME = { userSalary: 30_000, spouseSalary: 10_000 };
+/** "YYYY-MM" for the month being reported on. */
+export function currentCycle(now: Date = new Date()): string {
+  const month = `${now.getMonth() + 1}`.padStart(2, '0');
+  return `${now.getFullYear()}-${month}`;
+}
 
 @Injectable()
 export class IncomeService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async find() {
-    const income = await this.prisma.incomeSettings.findUnique({
-      where: { id: HOUSEHOLD_ID },
+  /**
+   * Everything that counts towards one month: the permanent sources plus any
+   * one-offs recorded against that cycle. One-offs add on top — they never
+   * replace the permanent income.
+   */
+  async findForCycle(cycle = currentCycle()) {
+    const sources = await this.prisma.incomeSource.findMany({
+      where: { OR: [{ cycle: null }, { cycle }] },
+      orderBy: [{ cycle: 'asc' }, { createdAt: 'asc' }],
     });
-    return income ?? { id: HOUSEHOLD_ID, ...DEFAULT_INCOME };
+
+    const permanent = sources.filter((source) => source.cycle === null);
+    const monthly = sources.filter((source) => source.cycle !== null);
+    const sum = (rows: typeof sources) =>
+      rows.reduce((total, row) => total + row.amount, 0);
+
+    const permanentTotal = sum(permanent);
+    const monthlyTotal = sum(monthly);
+
+    return {
+      cycle,
+      permanent,
+      monthly,
+      permanentTotal,
+      monthlyTotal,
+      total: permanentTotal + monthlyTotal,
+    };
   }
 
-  update(dto: UpdateIncomeDto) {
-    return this.prisma.incomeSettings.upsert({
-      where: { id: HOUSEHOLD_ID },
-      create: { id: HOUSEHOLD_ID, ...dto },
-      update: dto,
+  /** Every source regardless of cycle — for an "all one-offs" view. */
+  findAll() {
+    return this.prisma.incomeSource.findMany({
+      orderBy: [{ cycle: 'asc' }, { createdAt: 'asc' }],
     });
+  }
+
+  create(dto: UpsertIncomeSourceDto) {
+    return this.prisma.incomeSource.create({
+      data: {
+        label: dto.label.trim(),
+        amount: dto.amount,
+        cycle: dto.cycle ?? null,
+      },
+    });
+  }
+
+  async update(id: string, dto: UpsertIncomeSourceDto) {
+    await this.findOne(id);
+    return this.prisma.incomeSource.update({
+      where: { id },
+      data: {
+        label: dto.label.trim(),
+        amount: dto.amount,
+        cycle: dto.cycle ?? null,
+      },
+    });
+  }
+
+  async findOne(id: string) {
+    const source = await this.prisma.incomeSource.findUnique({ where: { id } });
+    if (!source) throw new NotFoundException(`Income source ${id} not found`);
+    return source;
+  }
+
+  async remove(id: string) {
+    await this.findOne(id);
+    await this.prisma.incomeSource.delete({ where: { id } });
   }
 }

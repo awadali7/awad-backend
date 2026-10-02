@@ -4,17 +4,21 @@ import { BillsService, currentCycle } from './bills.service';
 
 type BillRow = {
   id: string;
+  name: string;
   installmentsPaid: number | null;
   installmentsTotal: number | null;
   installmentsLeft: number | null;
+  startCycle: string | null;
   lastPaidCycle: string | null;
 };
 
 const bill = (overrides: Partial<BillRow> = {}): BillRow => ({
   id: 'bill-1',
+  name: 'Test bill',
   installmentsPaid: null,
   installmentsTotal: null,
   installmentsLeft: null,
+  startCycle: null,
   lastPaidCycle: null,
   ...overrides,
 });
@@ -118,6 +122,58 @@ describe('BillsService', () => {
       const result = await billsService.markPaid('bill-1');
 
       expect(result.lastPaidCycle).toBe(currentCycle());
+    });
+  });
+
+  describe('startCycle', () => {
+    it('refuses to settle a cycle before the bill starts', async () => {
+      prisma.bill.findUnique.mockResolvedValue(
+        bill({ startCycle: '2026-11', installmentsTotal: 12 }),
+      );
+
+      await expect(billsService.markPaid('bill-1', '2026-10')).rejects.toThrow(
+        /does not start until 2026-11/,
+      );
+      expect(prisma.bill.update).not.toHaveBeenCalled();
+    });
+
+    it('allows the first billed cycle itself', async () => {
+      prisma.bill.findUnique.mockResolvedValue(
+        bill({
+          startCycle: '2026-11',
+          installmentsPaid: 0,
+          installmentsTotal: 12,
+        }),
+      );
+
+      const result = await billsService.markPaid('bill-1', '2026-11');
+
+      expect(result).toMatchObject({
+        installmentsPaid: 1,
+        lastPaidCycle: '2026-11',
+      });
+    });
+
+    it('allows any cycle after the start', async () => {
+      prisma.bill.findUnique.mockResolvedValue(
+        bill({
+          startCycle: '2026-11',
+          installmentsPaid: 1,
+          installmentsTotal: 12,
+        }),
+      );
+
+      await expect(
+        billsService.markPaid('bill-1', '2027-03'),
+      ).resolves.toMatchObject({ lastPaidCycle: '2027-03' });
+    });
+
+    it('leaves bills with no start cycle unrestricted', async () => {
+      prisma.bill.findUnique.mockResolvedValue(bill({ startCycle: null }));
+
+      await expect(
+        billsService.markPaid('bill-1', '2020-01'),
+      ).resolves.toMatchObject({ lastPaidCycle: '2020-01' });
     });
   });
 

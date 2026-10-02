@@ -107,46 +107,77 @@ const SEED_BILLS = [
  * Only ever creates: re-running the seed must not reset a password that has
  * since been changed through the console.
  */
-async function seedAdminUser() {
-  const username = (process.env.ADMIN_USERNAME ?? '').toLowerCase().trim();
-  const password = process.env.ADMIN_PASSWORD;
+async function seedAdminUser(
+  rawUsername: string | undefined,
+  password: string | undefined,
+  name: string,
+) {
+  const username = (rawUsername ?? '').toLowerCase().trim();
 
   if (!username || !password) {
-    console.log('Skipping admin seed — ADMIN_USERNAME/ADMIN_PASSWORD not set.');
-    return;
+    console.log(`Skipping admin seed for ${name} — username/password not set.`);
+    return null;
   }
 
   const existing = await prisma.adminUser.findUnique({ where: { username } });
   if (existing) {
     console.log(`Skipping admin seed — "${username}" already exists.`);
-    return;
+    return existing;
   }
 
-  await prisma.adminUser.create({
+  const created = await prisma.adminUser.create({
     data: {
       username,
       passwordHash: await bcrypt.hash(password, 10),
-      name: 'Awad Ali',
+      name,
     },
   });
   console.log(`Created admin user "${username}".`);
+  return created;
 }
 
 async function main() {
-  await seedAdminUser();
+  const primary = await seedAdminUser(
+    process.env.ADMIN_USERNAME,
+    process.env.ADMIN_PASSWORD,
+    'Awad Ali',
+  );
 
-  const billCount = await prisma.bill.count();
+  // Second operator. Her money is scoped to her own account — the seed data
+  // below belongs to the primary admin only, so she starts with a clean slate.
+  await seedAdminUser(
+    process.env.SECOND_ADMIN_USERNAME,
+    process.env.SECOND_ADMIN_PASSWORD,
+    'Maisa',
+  );
+
+  if (!primary) {
+    console.log('No primary admin — skipping bill and income seed.');
+    return;
+  }
+
+  const billCount = await prisma.bill.count({
+    where: { adminUserId: primary.id },
+  });
   if (billCount === 0) {
-    await prisma.bill.createMany({ data: SEED_BILLS });
-    console.log(`Seeded ${SEED_BILLS.length} bills.`);
+    await prisma.bill.createMany({
+      data: SEED_BILLS.map((bill) => ({ ...bill, adminUserId: primary.id })),
+    });
+    console.log(`Seeded ${SEED_BILLS.length} bills for ${primary.username}.`);
   } else {
     console.log(`Skipping bill seed — ${billCount} bill(s) already exist.`);
   }
 
-  const incomeCount = await prisma.incomeSource.count();
+  const incomeCount = await prisma.incomeSource.count({
+    where: { adminUserId: primary.id },
+  });
   if (incomeCount === 0) {
     await prisma.incomeSource.createMany({
-      data: DEFAULT_INCOME_SOURCES.map((source) => ({ ...source, cycle: null })),
+      data: DEFAULT_INCOME_SOURCES.map((source) => ({
+        ...source,
+        cycle: null,
+        adminUserId: primary.id,
+      })),
     });
     console.log(`Seeded ${DEFAULT_INCOME_SOURCES.length} income sources.`);
   } else {

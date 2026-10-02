@@ -14,6 +14,7 @@ describe('IncomeService', () => {
   const prisma = {
     incomeSource: {
       findMany: jest.fn(),
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
@@ -39,7 +40,7 @@ describe('IncomeService', () => {
     it('adds one-offs on top of permanent income', async () => {
       prisma.incomeSource.findMany.mockResolvedValue(rows);
 
-      const result = await incomeService.findForCycle('2026-10');
+      const result = await incomeService.findForCycle('admin-1', '2026-10');
 
       expect(result.permanentTotal).toBe(40_000);
       expect(result.monthlyTotal).toBe(15_000);
@@ -49,7 +50,7 @@ describe('IncomeService', () => {
     it('splits permanent from one-off', async () => {
       prisma.incomeSource.findMany.mockResolvedValue(rows);
 
-      const result = await incomeService.findForCycle('2026-10');
+      const result = await incomeService.findForCycle('admin-1', '2026-10');
 
       expect(result.permanent.map((s) => s.label)).toEqual([
         'My salary',
@@ -61,11 +62,14 @@ describe('IncomeService', () => {
     it('only asks the database for permanent rows and the requested cycle', async () => {
       prisma.incomeSource.findMany.mockResolvedValue([]);
 
-      await incomeService.findForCycle('2026-10');
+      await incomeService.findForCycle('admin-1', '2026-10');
 
       expect(prisma.incomeSource.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { OR: [{ cycle: null }, { cycle: '2026-10' }] },
+          where: {
+            adminUserId: 'admin-1',
+            OR: [{ cycle: null }, { cycle: '2026-10' }],
+          },
         }),
       );
     });
@@ -75,7 +79,7 @@ describe('IncomeService', () => {
         rows.filter((row) => row.cycle === null),
       );
 
-      const result = await incomeService.findForCycle('2026-09');
+      const result = await incomeService.findForCycle('admin-1', '2026-09');
 
       expect(result.monthly).toEqual([]);
       expect(result.total).toBe(40_000);
@@ -84,7 +88,7 @@ describe('IncomeService', () => {
     it('defaults to the current cycle', async () => {
       prisma.incomeSource.findMany.mockResolvedValue([]);
 
-      const result = await incomeService.findForCycle();
+      const result = await incomeService.findForCycle('admin-1');
 
       expect(result.cycle).toBe(currentCycle());
     });
@@ -96,15 +100,19 @@ describe('IncomeService', () => {
         (args: { data: SourceRow }) => Promise.resolve(args.data),
       );
 
-      await incomeService.create({
-        label: '  Diwali bonus  ',
-        amount: 15_000,
-        cycle: '2026-10',
-      });
+      await incomeService.create(
+        { label: '  Diwali bonus  ', amount: 15_000, cycle: '2026-10' },
+        'admin-1',
+      );
 
       expect(prisma.incomeSource.create).toHaveBeenCalledWith({
         // Label trimmed so stray whitespace doesn't show up in the UI.
-        data: { label: 'Diwali bonus', amount: 15_000, cycle: '2026-10' },
+        data: {
+          label: 'Diwali bonus',
+          amount: 15_000,
+          cycle: '2026-10',
+          adminUserId: 'admin-1',
+        },
       });
     });
 
@@ -113,19 +121,29 @@ describe('IncomeService', () => {
         (args: { data: SourceRow }) => Promise.resolve(args.data),
       );
 
-      await incomeService.create({ label: 'My salary', amount: 30_000 });
+      await incomeService.create(
+        { label: 'My salary', amount: 30_000 },
+        'admin-1',
+      );
 
       expect(prisma.incomeSource.create).toHaveBeenCalledWith({
-        data: { label: 'My salary', amount: 30_000, cycle: null },
+        data: {
+          label: 'My salary',
+          amount: 30_000,
+          cycle: null,
+          adminUserId: 'admin-1',
+        },
       });
     });
   });
 
   describe('remove', () => {
     it('rejects an unknown id', async () => {
-      prisma.incomeSource.findUnique.mockResolvedValue(null);
+      prisma.incomeSource.findFirst.mockResolvedValue(null);
 
-      await expect(incomeService.remove('nope')).rejects.toThrow(/not found/);
+      await expect(incomeService.remove('nope', 'admin-1')).rejects.toThrow(
+        /not found/,
+      );
       expect(prisma.incomeSource.delete).not.toHaveBeenCalled();
     });
   });

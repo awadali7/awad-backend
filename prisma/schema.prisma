@@ -10,6 +10,78 @@ datasource db {
   provider = "postgresql"
 }
 
+enum CategoryKind {
+  emi
+  income
+  expense
+}
+
+/// A managed vocabulary of category names, edited under Settings.
+///
+/// Records store their category as a plain string rather than a foreign key:
+/// the Bill rows predate this table and already carry free text, and a label
+/// typo should never cascade into deleting someone's bill history.
+model Category {
+  id        String       @id @default(uuid())
+  kind      CategoryKind
+  name      String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([kind, name])
+  @@index([kind])
+}
+
+/// Money borrowed from a person or lender: a single sum taken on one date and
+/// owed back by another. Distinct from Bill, which repeats every month.
+model Borrowing {
+  id        String    @id @default(uuid())
+  /// Who the money came from.
+  lender    String
+  /// Whole rupees.
+  amount    Int
+  /// When the money was taken.
+  startDate DateTime
+  /// When it is owed back.
+  dueDate   DateTime
+  /// Null while still outstanding; set once settled.
+  repaidOn  DateTime?
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([repaidOn, dueDate])
+
+  /// Owner. Every read and write is filtered by this.
+  adminUserId String
+  admin       AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+}
+
+/// A one-off cost in a given month (groceries, fuel). Unlike Bill, an expense
+/// does not repeat — each one belongs to exactly one "YYYY-MM".
+model Expense {
+  id        String   @id @default(uuid())
+  label     String
+  /// Whole rupees.
+  amount    Int
+  /// "YYYY-MM" this expense counts towards.
+  cycle     String
+  category  String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cycle])
+
+  /// Owner. Every read and write is filtered by this.
+  adminUserId String
+  admin       AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+}
+
 enum BillType {
   emi
   chitty
@@ -40,6 +112,12 @@ model Bill {
   archived           Boolean   @default(false)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
+
+  /// Owner. Every read and write is filtered by this.
+  adminUserId String
+  admin       AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
 }
 
 /// A source of household income.
@@ -55,10 +133,17 @@ model IncomeSource {
   /// Whole rupees.
   amount    Int
   cycle     String?
+  category  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([cycle])
+
+  /// Owner. Every read and write is filtered by this.
+  adminUserId String
+  admin       AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
 }
 
 enum OrderStatus {
@@ -124,4 +209,11 @@ model AdminUser {
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+
+  /// Each operator's money is entirely their own. Categories are deliberately
+  /// NOT here — that vocabulary is shared across the household.
+  bills         Bill[]
+  incomeSources IncomeSource[]
+  expenses      Expense[]
+  borrowings    Borrowing[]
 }

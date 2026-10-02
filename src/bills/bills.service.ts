@@ -16,17 +16,28 @@ export function currentCycle(now: Date = new Date()): string {
 export class BillsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
-    return this.prisma.bill.findMany({ orderBy: { createdAt: 'asc' } });
+  findAll(adminUserId: string) {
+    return this.prisma.bill.findMany({
+      where: { adminUserId },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
-  async findOne(id: string) {
-    const bill = await this.prisma.bill.findUnique({ where: { id } });
+  /**
+   * Scoped by owner on purpose: findUnique({ id }) would happily return another
+   * operator's bill to anyone who guessed its id, and every mutation below
+   * routes through here. "Not yours" and "not found" are the same answer, so
+   * ids can't be probed either.
+   */
+  async findOne(id: string, adminUserId: string) {
+    const bill = await this.prisma.bill.findFirst({
+      where: { id, adminUserId },
+    });
     if (!bill) throw new NotFoundException(`Bill ${id} not found`);
     return bill;
   }
 
-  upsert(id: string, dto: UpsertBillDto) {
+  async upsert(id: string, dto: UpsertBillDto, adminUserId: string) {
     const data = {
       name: dto.name,
       category: dto.category,
@@ -42,9 +53,16 @@ export class BillsService {
       lastNotifiedCycle: dto.lastNotifiedCycle ?? null,
       archived: dto.archived ?? false,
     };
+    // Scoped guard before the upsert: a bare upsert on a known id would let one
+    // operator overwrite another's bill through the "update" branch.
+    const existing = await this.prisma.bill.findUnique({ where: { id } });
+    if (existing && existing.adminUserId !== adminUserId) {
+      throw new NotFoundException(`Bill ${id} not found`);
+    }
+
     return this.prisma.bill.upsert({
       where: { id },
-      create: { id, ...data },
+      create: { id, ...data, adminUserId },
       update: data,
     });
   }
@@ -59,8 +77,8 @@ export class BillsService {
    *   installmentsLeft set  -> "N left" counts down
    *   neither               -> open-ended (rent, credit card); only the cycle moves
    */
-  async markPaid(id: string, cycle = currentCycle()) {
-    const bill = await this.findOne(id);
+  async markPaid(id: string, adminUserId: string, cycle = currentCycle()) {
+    const bill = await this.findOne(id, adminUserId);
     if (bill.lastPaidCycle === cycle) return bill;
 
     // A bill that starts later isn't owed yet — paying it early would advance
@@ -91,8 +109,8 @@ export class BillsService {
   }
 
   /** Undo markPaid for the cycle it recorded — for a mis-tap. */
-  async markUnpaid(id: string, cycle = currentCycle()) {
-    const bill = await this.findOne(id);
+  async markUnpaid(id: string, adminUserId: string, cycle = currentCycle()) {
+    const bill = await this.findOne(id, adminUserId);
     if (bill.lastPaidCycle !== cycle) return bill;
 
     const data: {
@@ -113,8 +131,8 @@ export class BillsService {
     return this.prisma.bill.update({ where: { id }, data });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, adminUserId: string) {
+    await this.findOne(id, adminUserId);
     await this.prisma.bill.delete({ where: { id } });
   }
 }

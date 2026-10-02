@@ -56,3 +56,7 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+# Next.js build output. Nothing here builds a Next app, but running `next build`
+# from the wrong directory drops a .next/ here and it should never be committed.
+.next

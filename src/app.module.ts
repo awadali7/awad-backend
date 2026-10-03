@@ -13,6 +13,7 @@ import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
 import { PaymentsModule } from './payments/payments.module';
 import { BullseyeModule } from './bullseye/bullseye.module';
+import { BlogModule } from './blog/blog.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { BullseyeModule } from './bullseye/bullseye.module';
     AdminModule,
     PaymentsModule,
     BullseyeModule,
+    BlogModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -50,12 +50,11 @@ model Borrowing {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  @@index([repaidOn, dueDate])
-
   /// Owner. Every read and write is filtered by this.
   adminUserId String
   admin       AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
 
+  @@index([repaidOn, dueDate])
   @@index([adminUserId])
 }
 
@@ -73,12 +72,11 @@ model Expense {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([cycle])
-
   /// Owner. Every read and write is filtered by this.
   adminUserId String
   admin       AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
 
+  @@index([cycle])
   @@index([adminUserId])
 }
 
@@ -90,28 +88,28 @@ enum BillType {
 }
 
 model Bill {
-  id                 String    @id @default(uuid())
-  name               String
-  category           String
-  type               BillType
-  amount             Int
+  id                String   @id @default(uuid())
+  name              String
+  category          String
+  type              BillType
+  amount            Int
   /// Day of month (1-31), clamped to the month's last day. Null = not set.
-  dueDay             Int?
+  dueDay            Int?
   /// Due on the last calendar day of the month (overrides dueDay).
-  endOfMonth         Boolean   @default(false)
-  installmentsPaid   Int?
-  installmentsTotal  Int?
-  installmentsLeft   Int?
+  endOfMonth        Boolean  @default(false)
+  installmentsPaid  Int?
+  installmentsTotal Int?
+  installmentsLeft  Int?
   /// "YYYY-MM" of the first cycle this is billed in. Null = already running,
   /// which is how every bill created before this field existed behaves.
-  startCycle         String?
+  startCycle        String?
   /// "YYYY-MM" of the cycle last marked paid.
-  lastPaidCycle      String?
+  lastPaidCycle     String?
   /// "YYYY-MM" of the cycle the "due tomorrow" notification already fired for.
-  lastNotifiedCycle  String?
-  archived           Boolean   @default(false)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  lastNotifiedCycle String?
+  archived          Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   /// Owner. Every read and write is filtered by this.
   adminUserId String
@@ -137,12 +135,11 @@ model IncomeSource {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([cycle])
-
   /// Owner. Every read and write is filtered by this.
   adminUserId String
   admin       AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
 
+  @@index([cycle])
   @@index([adminUserId])
 }
 
@@ -164,19 +161,19 @@ model User {
 }
 
 model Product {
-  id          String  @id @default(uuid())
-  slug        String  @unique
-  name        String
-  description String
+  id           String   @id @default(uuid())
+  slug         String   @unique
+  name         String
+  description  String
   /// Price in paise (smallest INR unit) — Razorpay convention, avoids float rounding.
   priceInPaise Int
   /// Only ever returned once the caller's Order for this product is `paid`.
-  downloadUrl String
-  imageUrl    String?
+  downloadUrl  String
+  imageUrl     String?
   /// Soft-delete flag (mirrors Bill.archived). False = hidden from public listing.
-  archived    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  archived     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   orders Order[]
 }
@@ -216,4 +213,73 @@ model AdminUser {
   incomeSources IncomeSource[]
   expenses      Expense[]
   borrowings    Borrowing[]
+
+  /// Posts this operator wrote. Unlike the money models, the blog is shared:
+  /// every admin can edit every post, and this only records authorship.
+  blogPosts BlogPost[]
+}
+
+enum BlogPostStatus {
+  draft
+  published
+}
+
+/// A section of the public blog, served at /blog/category/<slug>.
+///
+/// Deliberately not `Category`: that model is the money vocabulary (EMI,
+/// income, expense) and the two lists have nothing in common.
+model BlogCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  /// URL segment. Changing it changes the category page's address.
+  slug        String   @unique
+  /// Intro text and meta description for the category page.
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  posts BlogPost[]
+}
+
+/// A post on the public blog at /blog/<slug>. The body is markdown.
+model BlogPost {
+  id               String         @id @default(uuid())
+  /// URL segment. Locked once the post has been published, so links never break.
+  slug             String         @unique
+  title            String
+  /// Card text, and the meta description when seoDescription is empty.
+  excerpt          String
+  /// Markdown body.
+  content          String
+  coverImageUrl    String?
+  coverImageAlt    String?
+  /// Lowercase, de-duplicated labels such as "react" or "nextjs".
+  tags             String[]       @default([])
+  status           BlogPostStatus @default(draft)
+  /// Words divided by 200, rounded up. Recomputed on every save.
+  readingMinutes   Int            @default(1)
+  /// Replaces the title tag only; the page heading keeps `title`.
+  seoTitle         String?
+  /// Replaces the excerpt as the meta description.
+  seoDescription   String?
+  /// Set only when the post first appeared elsewhere (dev.to, Medium).
+  canonicalUrl     String?
+  /// Set by the first publish and never moved afterwards.
+  publishedAt      DateTime?
+  /// Last change to the title, excerpt or body after the first publish.
+  /// Drives the "Updated" label, article:modified_time and sitemap lastmod,
+  /// so republishing alone never looks like a content change.
+  contentUpdatedAt DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  categoryId String?
+  category   BlogCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  /// Who wrote it. Kept when the account is deleted, as an unattributed post.
+  authorId String?
+  author   AdminUser? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([status, publishedAt])
+  @@index([categoryId])
 }

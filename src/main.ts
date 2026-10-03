@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { assertRequiredEnv } from './config/validate-env';
+import { uploadsRoot } from './blog/uploads/blog-uploads.util';
 
 /**
  * Swagger describes every route including the admin auth endpoints, so it is
@@ -30,6 +31,20 @@ async function bootstrap() {
   app.use(helmet());
   // Nothing is gained by advertising the framework to a scanner.
   app.disable('x-powered-by');
+
+  // Blog images uploaded from the admin console. Names are random and never
+  // reused, so browsers may cache them for a year. The CORP header lets the
+  // portfolio, a different site, show them; helmet's default would block it.
+  app.useStaticAssets(uploadsRoot(), {
+    prefix: '/uploads/',
+    index: false,
+    dotfiles: 'deny',
+    maxAge: '365d',
+    immutable: true,
+    setHeaders: (res: { setHeader: (name: string, value: string) => void }) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
+  });
 
   app.enableCors({
     origin: (process.env.CORS_ORIGIN ?? 'http://localhost:3000').split(','),

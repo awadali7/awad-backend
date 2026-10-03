@@ -60,3 +60,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # Next.js build output. Nothing here builds a Next app, but running `next build`
 # from the wrong directory drops a .next/ here and it should never be committed.
 .next
+
+# Blog images uploaded through the admin console (see UPLOADS_DIR)
+/uploads

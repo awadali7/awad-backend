@@ -169,6 +169,41 @@ pm2 list                                         # both apps online
 
 Then sign in at `https://awadali.com/admin`.
 
+## Blog image uploads
+
+The admin console uploads blog images to this server, and the API serves them
+at `https://api.awadali.com/uploads/...`. Three steps, once:
+
+1. Keep the files outside the code folder, so a deploy can never delete them,
+   and let the user PM2 runs as write there:
+
+   ```bash
+   sudo mkdir -p /var/www/awad-uploads
+   sudo chown "$(whoami)" /var/www/awad-uploads   # the user that runs PM2
+   ```
+
+2. Add to `/var/www/awad-backend/.env`, then restart with
+   `pm2 restart awad-backend --update-env`:
+
+   ```ini
+   UPLOADS_DIR=/var/www/awad-uploads
+   UPLOADS_PUBLIC_URL=https://api.awadali.com/uploads
+   ```
+
+3. Let uploads through nginx. The live file has the TLS block certbot added, so
+   don't copy `deploy/nginx-api.conf` over it. Add its
+   `location = /admin/blog/uploads { ... }` block to the `server` block in
+   `/etc/nginx/sites-available/awad-backend` that has `listen 443 ssl`, then:
+
+   ```bash
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+
+   Without this, nginx answers any upload over 256 KB with `413`.
+
+Back up `/var/www/awad-uploads` along with the database: posts link to these
+files, and nothing else holds a copy.
+
 ## Rollback
 
 ```bash
